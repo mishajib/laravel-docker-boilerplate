@@ -1,0 +1,86 @@
+version: '3'
+services:
+
+    # MySQL
+    lr-docker-mysql:
+        image: mysql:latest
+        container_name: lr-docker-mysql
+        restart: unless-stopped
+        tty: true
+        ports:
+            - 3337:3306
+        environment:
+            MYSQL_DATABASE: laravel_docker
+            MYSQL_ROOT_PASSWORD: 123123123
+            SERVICE_TAGS: docker
+            SERVICE_NAME: mysql
+        volumes:
+            - ./docker/mysql/my.cnf:/etc/mysql/my.cnf:ro
+            - ./docker/mysql-files:/var/lib/mysql-files
+            - dbdata:/var/lib/mysql
+        networks:
+            - lr-docker-network
+
+    # Nginx
+    lr-docker-nginx:
+        image: nginx:alpine
+        container_name: lr-docker-nginx
+        restart: unless-stopped
+        tty: true
+        environment:
+            SERVICE_TAGS: docker
+            SERVICE_NAME: nginx
+        ports:
+            - "${LISTEN_IP}:80:80"
+        depends_on:
+            - lr-docker-backend
+        volumes:
+            - ./docker/nginx/conf.d/:/etc/nginx/conf.d/:ro
+        networks:
+            - lr-docker-network
+
+    # PHP-FPM with backend
+    lr-docker-backend:
+        container_name: lr-docker-backend
+        build:
+            context: .
+            dockerfile: docker/Dockerfile
+        restart: unless-stopped
+        tty: true
+        working_dir: /app
+        depends_on:
+            - lr-docker-mysql
+        volumes:
+            - "./:/app"
+        environment:
+            SERVICE_NAME: backend
+            SERVICE_TAGS: docker
+        networks:
+            - lr-docker-network
+
+    # PHPMyAdmin Setup
+    lr-docker-phpmyadmin:
+        image: phpmyadmin:5.1.0-apache
+        container_name: lr-docker-phpmyadmin
+        restart: unless-stopped
+        ports:
+            - 8200:80
+        environment:
+            PMA_HOST: lr-docker-mysql
+            PMA_PORT: 3306
+            PMA_USER: root
+            PMA_PASSWORD: 123123123
+        networks:
+            - lr-docker-network
+
+# networks
+networks:
+    lr-docker-network:
+        driver: bridge
+        driver_opts:
+            com.docker.network.bridge.host_binding_ipv4: "${LISTEN_IP}"
+
+# volume to store DB files
+volumes:
+    dbdata:
+        driver: local
